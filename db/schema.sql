@@ -55,3 +55,12 @@ grant select on public.content_public to anon;
 -- on the view to anon lets the dashboard read sanitized rows without exposing the
 -- base table. Verify after setup: anon SELECT on content_public works, anon SELECT
 -- on content_items returns [] (RLS).
+
+-- ── Dedup helper RPC ─────────────────────────────────────────────────────────
+-- Returns exactly one row {found: bool}. n8n's HTTP node drops a branch on an empty
+-- [] response, so an "always one row" RPC keeps the dedup IF/Filter reliable
+-- (same pattern proven in the lead-qualification project).
+create or replace function public.content_exists(p_key text)
+returns table(found boolean) language sql stable as $$
+  select exists(select 1 from public.content_items where dedup_key = p_key) as found;
+$$;

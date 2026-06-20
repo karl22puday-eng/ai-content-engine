@@ -83,14 +83,13 @@ See `db/schema.sql`.
 
 > ✅ = done · ⏳ = in progress · ⬜ = not started
 
-1. ⬜ **Repo + docs scaffold** — CLAUDE.md, this guide, schema, `.env.example`, `.gitignore`,
-   README skeleton. *Accept:* repo initialized, pushed, `.env` ignored.
-2. ⬜ **Supabase schema** — run `db/schema.sql` (table + view + RLS + index).
-   *Accept:* `content_items` and `content_public` exist; anon can read the view, not the table.
-3. ⬜ **`.env` populated** — Supabase URL/service_role/anon, Groq key, Telegram token+chat_id,
-   N8N_WEBHOOK_BASE, plus the chosen RSS feed URL(s). *Accept:* all values present; Telegram
-   send test OK.
-4. ⬜ **Slice 1 — the generator (no approval yet):** Schedule/Manual → RSS read → validate +
+1. ✅ **Repo + docs scaffold** — CLAUDE.md, this guide, schema, `.env.example`, `.gitignore`,
+   README skeleton. Repo initialized + pushed (github.com/karl22puday-eng/ai-content-engine), `.env` ignored.
+2. ✅ **Supabase schema** — ran `db/schema.sql`. Verified: `content_public` anon-readable (200),
+   raw `content_items` RLS-blocked (200 `[]`).
+3. ✅ **`.env` populated** — reused #1's Supabase/Groq/Telegram/n8n keys + `RSS_FEED_URL` (TechCrunch AI).
+   Feed verified (20 items); grounding approach confirmed (fetch article body, fallback to summary).
+4. ⏳ **Slice 1 — the generator (no approval yet):** Schedule/Manual → RSS read → validate +
    dedup → fetch article text → Groq generate pack (strict JSON) → parse/validate → upsert to
    Supabase (`pending`). *Accept:* a real feed item produces one well-formed row; re-run does
    not duplicate; malformed/empty source handled.
@@ -138,6 +137,14 @@ Validation rules enforced in a Code node after the model:
 - **Publish step** (auto-post to LinkedIn/X) is intentionally **out of scope** for the free
   build (those APIs need app review / paid tiers). "Ready" = approved & queued; the dashboard
   is the deliverable surface. Note this honestly in the README as a deliberate boundary.
-- RSS feed choice: pick 1–2 stable AI/automation feeds; store the URL(s) in `.env`.
+- RSS feed choice: **TechCrunch AI feed** (`https://techcrunch.com/category/artificial-intelligence/feed/`),
+  stored in `.env` as `RSS_FEED_URL`. Verified: 20 items, but the feed carries only
+  `title` + a one-line `description` (no `content:encoded`/full body).
+- **Grounding decision (refines step 4's "fetch article text"):** because the feed lacks a
+  full body, slice 1 does an HTTP GET on the article `link`, extracts `<p>` paragraphs
+  (filter to length > ~60 chars to drop nav/menu boilerplate), and joins them as the
+  grounding text. **Fallback:** if the fetch fails or yields too little text, ground on the
+  RSS `description`. Verified a real article fetch returns ~8.8k chars of usable body. The
+  prompt instructs the model to use ONLY the provided text and not fabricate facts/quotes/stats.
 - Reuse the Telegram bot from project #1 but consider a distinct chat or a clear message
   prefix so the two projects' notifications don't get confused.
