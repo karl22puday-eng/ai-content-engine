@@ -63,9 +63,14 @@ Schedule / RSS (AI & automation news)
      validation + regenerate loop, Telegram callback + Wait-node resume for HITL,
      sanitized public view for safe anon reads, deliberate out-of-scope publish step. -->
 
+## Live demo
+
+- **Content dashboard:** https://karl22puday-eng.github.io/ai-content-engine/ &nbsp;<sub>(read-only, sanitized view)</sub>
+
 ## Status
 
-🚧 In progress — see [`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md) for the build order.
+Working end to end: RSS → AI content pack → Telegram approval → status flip → dashboard.
+See [`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md) for the build order and engineering notes.
 
 ---
 

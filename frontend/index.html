@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Xenogliph — Content Engine</title>
+  <meta name="description" content="Live board of AI-generated content packs, human-approved before publish." />
+  <style>
+    :root {
+      --bg:#0b1020; --bg-soft:#11182e; --card:#151d35; --line:#25304f;
+      --text:#e8edf7; --muted:#93a0bd; --accent:#6ea8fe; --accent-2:#8b7cff;
+      --ready:#34d399; --pending:#fbbf24; --rejected:#fb7185; --radius:14px;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; min-height:100vh; color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 80% -10%, #1b2750 0%, transparent 60%),
+                  radial-gradient(900px 500px at -10% 110%, #221a4d 0%, transparent 55%), var(--bg);
+      padding: 28px 18px;
+    }
+    .wrap { max-width: 1000px; margin: 0 auto; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:22px; }
+    .brand { display:flex; align-items:center; gap:10px; }
+    .brand .dot { width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,var(--accent),var(--accent-2)); box-shadow:0 6px 18px rgba(110,168,254,.35); }
+    .brand b { font-size:18px; } .brand span { color:var(--muted); font-size:13px; display:block; }
+    .controls { display:flex; align-items:center; gap:10px; }
+    .updated { color:var(--muted); font-size:12px; }
+    button { border:1px solid var(--line); background:#0e1426; color:var(--text); padding:9px 14px; border-radius:10px; font-size:13px; cursor:pointer; transition:border-color .15s; font-family:inherit; }
+    button:hover { border-color:var(--accent); }
+
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+    @media (max-width:620px){ .stats{ grid-template-columns:repeat(2,1fr);} }
+    .stat { background:linear-gradient(180deg,var(--card),var(--bg-soft)); border:1px solid var(--line); border-radius:var(--radius); padding:16px; }
+    .stat .n { font-size:26px; font-weight:700; } .stat .l { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin-top:2px; }
+    .stat.ready .n{ color:var(--ready);} .stat.pending .n{ color:var(--pending);} .stat.rejected .n{ color:var(--rejected);}
+
+    .grid { display:grid; grid-template-columns:1fr; gap:14px; }
+    .pack { background:linear-gradient(180deg,var(--card),var(--bg-soft)); border:1px solid var(--line); border-radius:var(--radius); padding:18px; }
+    .pack.s-ready { border-left:3px solid var(--ready); }
+    .pack.s-pending { border-left:3px solid var(--pending); }
+    .pack.s-rejected { border-left:3px solid var(--rejected); opacity:.72; }
+    .pack-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    .topic { font-size:16px; font-weight:700; }
+    .src { color:var(--muted); font-size:13px; margin-top:3px; }
+    .src a { color:var(--accent); text-decoration:none; }
+    .badge { display:inline-block; padding:3px 10px; border-radius:99px; font-size:12px; font-weight:600; text-transform:capitalize; white-space:nowrap; }
+    .badge.ready { background:rgba(52,211,153,.14); color:var(--ready); border:1px solid rgba(52,211,153,.4); }
+    .badge.pending { background:rgba(251,191,36,.14); color:var(--pending); border:1px solid rgba(251,191,36,.4); }
+    .badge.rejected { background:rgba(251,113,133,.14); color:var(--rejected); border:1px solid rgba(251,113,133,.4); }
+    .date { color:var(--muted); font-size:12px; margin-top:6px; }
+
+    .channels { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
+    .chip { border:1px solid var(--line); background:#0e1426; color:var(--muted); padding:6px 12px; border-radius:10px; font-size:13px; cursor:pointer; }
+    .chip.active { color:var(--text); border-color:var(--accent); }
+    .content { margin-top:12px; white-space:pre-wrap; line-height:1.55; font-size:14px; color:#dbe3f4;
+               background:#0e1426; border:1px solid var(--line); border-radius:10px; padding:14px; display:none; }
+    .content.show { display:block; }
+    .content ol { margin:0; padding-left:20px; } .content li { margin-bottom:8px; }
+
+    .empty, .error { padding:40px; text-align:center; color:var(--muted); }
+    .error { color:#fca5a5; }
+    .foot { color:var(--muted); font-size:12px; text-align:center; margin-top:18px; }
+    .foot a { color:var(--accent); text-decoration:none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <span class="dot"></span>
+        <div><b>Xenogliph</b><span>Content engine — AI-generated, human-approved</span></div>
+      </div>
+      <div class="controls">
+        <span class="updated" id="updated"></span>
+        <button id="refresh">↻ Refresh</button>
+      </div>
+    </header>
+
+    <div class="stats">
+      <div class="stat"><div class="n" id="s-total">–</div><div class="l">Total packs</div></div>
+      <div class="stat ready"><div class="n" id="s-ready">–</div><div class="l">Ready</div></div>
+      <div class="stat pending"><div class="n" id="s-pending">–</div><div class="l">Pending</div></div>
+      <div class="stat rejected"><div class="n" id="s-rejected">–</div><div class="l">Rejected</div></div>
+    </div>
+
+    <div class="grid" id="grid">
+      <div class="empty">Loading content packs…</div>
+    </div>
+
+    <p class="foot">Read-only view via Supabase anon key (RLS-protected sanitized view). Part of the
+      <a href="https://github.com/karl22puday-eng/ai-content-engine">AI Content Engine</a>.</p>
+  </div>
+
+  <script>
+    // Public anon key — RLS-restricted: reads ONLY the sanitized `content_public` view.
+    const SUPABASE_URL = "https://sjomutxvmiatruokjgjy.supabase.co";
+    const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqb211dHh2bWlhdHJ1b2tqZ2p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNjUyMTIsImV4cCI6MjA5Njk0MTIxMn0.Vrkk26tSiDbMa4Fwhq579Kc1WlOWndtRmzcKCuDdRTg";
+
+    const gridEl = document.getElementById("grid");
+    const fmtDate = (s) => new Date(s).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
+    async function load() {
+      gridEl.innerHTML = '<div class="empty">Loading content packs…</div>';
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/content_public?select=source_title,source_url,topic,linkedin_post,twitter_thread,newsletter_blurb,status,created_at&order=created_at.desc`, {
+          headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` }
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        render(await res.json());
+        document.getElementById("updated").textContent = "Updated " + new Date().toLocaleTimeString();
+      } catch (e) {
+        gridEl.innerHTML = '<div class="error">Could not load content packs. ' + esc(e.message) + '</div>';
+      }
+    }
+
+    function render(packs) {
+      const by = (s) => packs.filter(p => p.status === s).length;
+      document.getElementById("s-total").textContent = packs.length;
+      document.getElementById("s-ready").textContent = by("ready");
+      document.getElementById("s-pending").textContent = by("pending");
+      document.getElementById("s-rejected").textContent = by("rejected");
+
+      if (!packs.length) {
+        gridEl.innerHTML = '<div class="empty">No content packs yet — run the generator workflow.</div>';
+        return;
+      }
+      gridEl.innerHTML = packs.map((p, i) => {
+        const st = (p.status || "pending").toLowerCase();
+        const thread = Array.isArray(p.twitter_thread) ? p.twitter_thread : [];
+        const li = esc(p.linkedin_post);
+        const blurb = esc(p.newsletter_blurb);
+        const threadHtml = thread.length ? "<ol>" + thread.map(t => `<li>${esc(t)}</li>`).join("") + "</ol>" : "—";
+        const rejected = st === "rejected";
+        const src = p.source_url ? `<a href="${esc(p.source_url)}" target="_blank" rel="noopener">${esc(p.source_title) || "source"}</a>` : esc(p.source_title);
+        return `<div class="pack s-${st}">
+          <div class="pack-head">
+            <div>
+              <div class="topic">${esc(p.topic) || "Untitled"}</div>
+              <div class="src">↳ ${src}</div>
+              <div class="date">${p.created_at ? fmtDate(p.created_at) : ""}</div>
+            </div>
+            <span class="badge ${st}">${esc(st)}</span>
+          </div>
+          ${rejected ? "" : `
+          <div class="channels" data-i="${i}">
+            <span class="chip active" data-ch="li">LinkedIn</span>
+            <span class="chip" data-ch="tw">X thread (${thread.length})</span>
+            <span class="chip" data-ch="nl">Newsletter</span>
+          </div>
+          <div class="content show" data-c="li" data-i="${i}">${li || "—"}</div>
+          <div class="content" data-c="tw" data-i="${i}">${threadHtml}</div>
+          <div class="content" data-c="nl" data-i="${i}">${blurb || "—"}</div>`}
+        </div>`;
+      }).join("");
+
+      // channel toggles
+      gridEl.querySelectorAll(".channels").forEach(bar => {
+        bar.querySelectorAll(".chip").forEach(chip => {
+          chip.addEventListener("click", () => {
+            const i = bar.dataset.i, ch = chip.dataset.ch;
+            bar.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c === chip));
+            gridEl.querySelectorAll(`.content[data-i="${i}"]`).forEach(c =>
+              c.classList.toggle("show", c.dataset.c === ch));
+          });
+        });
+      });
+    }
+
+    document.getElementById("refresh").addEventListener("click", load);
+    load();
+    setInterval(load, 30000); // auto-refresh every 30s
+  </script>
+</body>
+</html>
