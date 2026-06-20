@@ -112,8 +112,8 @@ See `db/schema.sql`.
    status board (ready / pending / rejected) with stat cards + per-pack channel tabs
    (LinkedIn / X thread / Newsletter); rejected packs hide their copy. Pages-via-Actions deploy
    (`.github/workflows/deploy-pages.yml`). *Accept:* live on Pages, reads sanitized view, anon
-   blocked on raw table. **Built + anon query verified (3 packs, threads as arrays); awaiting
-   Pages enable (Settings -> Pages -> Source = GitHub Actions, same as #1).**
+   blocked on raw table. **VERIFIED LIVE 2026-06-20:** https://karl22puday-eng.github.io/ai-content-engine/
+   returns 200, renders the board. (Pages enabled + Action re-run, same first-run gotcha as #1.)
 7. ⬜ **Polish:** README (pitch, architecture diagram, demo GIF slot), exported workflow JSON,
    error-trigger workflow, repo About/topics/pin.
 
