@@ -89,15 +89,23 @@ See `db/schema.sql`.
    raw `content_items` RLS-blocked (200 `[]`).
 3. ✅ **`.env` populated** — reused #1's Supabase/Groq/Telegram/n8n keys + `RSS_FEED_URL` (TechCrunch AI).
    Feed verified (20 items); grounding approach confirmed (fetch article body, fallback to summary).
-4. ⏳ **Slice 1 — the generator (no approval yet):** Schedule/Manual → RSS read → validate +
+4. ✅ **Slice 1 — the generator (no approval yet):** Schedule/Manual → RSS read → validate +
    dedup → fetch article text → Groq generate pack (strict JSON) → parse/validate → upsert to
    Supabase (`pending`). *Accept:* a real feed item produces one well-formed row; re-run does
    not duplicate; malformed/empty source handled.
-5. ⬜ **Slice 2 — Telegram approval loop (HITL):** after insert, send a Telegram preview with
-   inline buttons [Approve][Reject][Regenerate]; Wait node resumes on the callback webhook;
-   branch updates status (`ready`/`rejected`) or regenerates. *Accept:* tapping Approve flips
-   the row to `ready` exactly once; Reject → `rejected`; Regenerate produces a fresh preview;
-   a duplicate/late callback does not double-apply.
+   **VERIFIED 2026-06-20:** ran green in n8n; row landed (`pending`, topic + 6-post thread +
+   LinkedIn + blurb). Idempotency proven — re-run did NOT duplicate the processed article; the
+   pipeline correctly advanced to the next newest unprocessed item (2 rows = 2 unique dedup_keys).
+   Behavior by design: one fresh content pack per run (ideal for the one-at-a-time approval in Slice 2).
+5. ⏳ **Slice 2 — Telegram approval loop (HITL):** after insert, `Prep Approval` builds a preview
+   → `Telegram Approve` (the node's built-in **Send and Wait for Response**, `responseType=approval`,
+   `approvalType=double` → Approve/Disapprove) pauses the execution → `IF Approved` branches on
+   `$json.data.approved` → `Set Ready` / `Set Rejected` PATCH the row (status + `reviewed_at`).
+   *Accept:* tapping Approve flips the row to `ready` exactly once; Disapprove → `rejected`;
+   the resume URL is single-use so a re-tap doesn't double-apply.
+   **Scope note:** Approve/Reject only (the node's approval mode is two-button). "Regenerate" is a
+   deferred enhancement (would re-invoke the generation pipeline for the row).
+   *Built; awaiting in-n8n test.*
 6. ⬜ **Slice 3 — dashboard:** `frontend/dashboard.html` reads `content_public` via anon key;
    content-calendar / status board (pending / ready / rejected), shows the generated copy.
    *Accept:* live on Pages, reads sanitized view, anon blocked on raw table.

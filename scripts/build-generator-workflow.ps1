@@ -131,8 +131,30 @@ return [{ json: {
 }}];
 '@
 
+# ---------- Code: Prep Approval (normalize inserted row + build the Telegram preview) ----------
+$jsPrepApproval = @'
+// Insert Content returned the upserted row (representation). Normalize and build a preview message.
+const items = $input.all();
+let row = items[0] ? items[0].json : {};
+if (Array.isArray(row)) row = row[0] || {};
+const s = v => (v == null ? '' : String(v));
+const thread = Array.isArray(row.twitter_thread) ? row.twitter_thread : [];
+let preview =
+  'NEW CONTENT PACK -- approve to publish\n\n' +
+  'Topic: ' + s(row.topic) + '\n' +
+  'Source: ' + s(row.source_title) + '\n\n' +
+  'LINKEDIN:\n' + s(row.linkedin_post) + '\n\n' +
+  'THREAD (' + thread.length + ' posts):\n' + thread.map((t, i) => (i + 1) + '. ' + s(t)).join('\n') + '\n\n' +
+  'NEWSLETTER:\n' + s(row.newsletter_blurb);
+if (preview.length > 3900) preview = preview.slice(0, 3900) + '\n...';   // Telegram 4096-char limit
+return [{ json: { id: row.id, source_title: s(row.source_title), preview } }];
+'@
+
 # ---------- expression bodies ----------
 $dedupBody  = '={{ JSON.stringify({ p_key: $json.dedup_key }) }}'
+$readyUrl   = '={{ "' + $SUPA + '/rest/v1/content_items?id=eq." + $(''Prep Approval'').first().json.id }}'
+$readyBody  = '={{ JSON.stringify({ status: "ready", reviewed_at: $now.toISO() }) }}'
+$rejectBody = '={{ JSON.stringify({ status: "rejected", reviewed_at: $now.toISO() }) }}'
 $groqBody   = '={{ JSON.stringify({ model: "llama-3.3-70b-versatile", temperature: 0.4, response_format: { type: "json_object" }, messages: [ { role: "system", content: $json.systemPrompt }, { role: "user", content: $json.userPrompt } ] }) }}'
 $insertBody = '={{ JSON.stringify({ source_url: $json.source_url, source_title: $json.source_title, source_published_at: $json.source_published_at, topic: $json.topic, linkedin_post: $json.linkedin_post, twitter_thread: $json.twitter_thread, newsletter_blurb: $json.newsletter_blurb, status: $json.status, model: $json.model, dedup_key: $json.dedup_key }) }}'
 
@@ -197,6 +219,39 @@ $nodes = @(
           [ordered]@{ name='Prefer'; value='resolution=merge-duplicates,return=representation' } ) };
         sendBody=$true; specifyBody='json'; jsonBody=$insertBody; options=@{} };
     id='n-insert'; name='Insert Content'; type='n8n-nodes-base.httpRequest'; typeVersion=4.2; position=@(2860,360);
+    retryOnFail=$true; maxTries=3; waitBetweenTries=2000 },
+
+  # ----- Slice 2: human-in-the-loop approval -----
+  [ordered]@{ parameters=[ordered]@{ mode='runOnceForAllItems'; jsCode=$jsPrepApproval };
+    id='n-prepapproval'; name='Prep Approval'; type='n8n-nodes-base.code'; typeVersion=2; position=@(3080,360) },
+
+  [ordered]@{ parameters=[ordered]@{ operation='sendAndWait'; chatId='7237369464';
+        message='={{ $json.preview }}'; responseType='approval';
+        approvalOptions=[ordered]@{ values=[ordered]@{ approvalType='double' } }; options=@{} };
+    id='n-approve'; name='Telegram Approve'; type='n8n-nodes-base.telegram'; typeVersion=1.2; position=@(3300,360);
+    webhookId='content-approval' },
+
+  [ordered]@{ parameters=[ordered]@{ conditions=[ordered]@{
+        options=[ordered]@{ caseSensitive=$true; leftValue=''; typeValidation='loose' };
+        conditions=@( [ordered]@{ id='cond-approved'; leftValue='={{ $json.data.approved }}'; rightValue=$true;
+          operator=[ordered]@{ type='boolean'; operation='true'; singleValue=$true } } );
+        combinator='and' } };
+    id='n-ifapproved'; name='IF Approved'; type='n8n-nodes-base.if'; typeVersion=2; position=@(3520,360) },
+
+  [ordered]@{ parameters=[ordered]@{ method='PATCH'; url=$readyUrl;
+        authentication='predefinedCredentialType'; nodeCredentialType='supabaseApi';
+        sendHeaders=$true; headerParameters=@{ parameters=@(
+          [ordered]@{ name='Prefer'; value='return=minimal' } ) };
+        sendBody=$true; specifyBody='json'; jsonBody=$readyBody; options=@{} };
+    id='n-setready'; name='Set Ready'; type='n8n-nodes-base.httpRequest'; typeVersion=4.2; position=@(3740,260);
+    retryOnFail=$true; maxTries=3; waitBetweenTries=2000 },
+
+  [ordered]@{ parameters=[ordered]@{ method='PATCH'; url=$readyUrl;
+        authentication='predefinedCredentialType'; nodeCredentialType='supabaseApi';
+        sendHeaders=$true; headerParameters=@{ parameters=@(
+          [ordered]@{ name='Prefer'; value='return=minimal' } ) };
+        sendBody=$true; specifyBody='json'; jsonBody=$rejectBody; options=@{} };
+    id='n-setrejected'; name='Set Rejected'; type='n8n-nodes-base.httpRequest'; typeVersion=4.2; position=@(3740,460);
     retryOnFail=$true; maxTries=3; waitBetweenTries=2000 }
 )
 
@@ -216,6 +271,14 @@ $connections = [ordered]@{
   'Assemble Prompt'      = One 'Groq Generate'
   'Groq Generate'        = One 'Parse Pack'
   'Parse Pack'           = One 'Insert Content'
+  # Slice 2: after storing the pending pack, ask a human to approve via Telegram, then set status.
+  'Insert Content'       = One 'Prep Approval'
+  'Prep Approval'        = One 'Telegram Approve'
+  'Telegram Approve'     = One 'IF Approved'
+  'IF Approved'          = @{ main = @(
+                              (,([ordered]@{ node='Set Ready';    type='main'; index=0 })),
+                              (,([ordered]@{ node='Set Rejected'; type='main'; index=0 }))
+                            ) }
 }
 
 $workflow = [ordered]@{

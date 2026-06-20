@@ -284,6 +284,145 @@
                       "retryOnFail":  true,
                       "maxTries":  3,
                       "waitBetweenTries":  2000
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "// Insert Content returned the upserted row (representation). Normalize and build a preview message.\nconst items = $input.all();\nlet row = items[0] ? items[0].json : {};\nif (Array.isArray(row)) row = row[0] || {};\nconst s = v =\u003e (v == null ? \u0027\u0027 : String(v));\nconst thread = Array.isArray(row.twitter_thread) ? row.twitter_thread : [];\nlet preview =\n  \u0027NEW CONTENT PACK -- approve to publish\\n\\n\u0027 +\n  \u0027Topic: \u0027 + s(row.topic) + \u0027\\n\u0027 +\n  \u0027Source: \u0027 + s(row.source_title) + \u0027\\n\\n\u0027 +\n  \u0027LINKEDIN:\\n\u0027 + s(row.linkedin_post) + \u0027\\n\\n\u0027 +\n  \u0027THREAD (\u0027 + thread.length + \u0027 posts):\\n\u0027 + thread.map((t, i) =\u003e (i + 1) + \u0027. \u0027 + s(t)).join(\u0027\\n\u0027) + \u0027\\n\\n\u0027 +\n  \u0027NEWSLETTER:\\n\u0027 + s(row.newsletter_blurb);\nif (preview.length \u003e 3900) preview = preview.slice(0, 3900) + \u0027\\n...\u0027;   // Telegram 4096-char limit\nreturn [{ json: { id: row.id, source_title: s(row.source_title), preview } }];"
+                                     },
+                      "id":  "n-prepapproval",
+                      "name":  "Prep Approval",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       3080,
+                                       360
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "sendAndWait",
+                                         "chatId":  "7237369464",
+                                         "message":  "={{ $json.preview }}",
+                                         "responseType":  "approval",
+                                         "approvalOptions":  {
+                                                                 "values":  {
+                                                                                "approvalType":  "double"
+                                                                            }
+                                                             },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "n-approve",
+                      "name":  "Telegram Approve",
+                      "type":  "n8n-nodes-base.telegram",
+                      "typeVersion":  1.2,
+                      "position":  [
+                                       3300,
+                                       360
+                                   ],
+                      "webhookId":  "content-approval"
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "loose"
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "cond-approved",
+                                                                                   "leftValue":  "={{ $json.data.approved }}",
+                                                                                   "rightValue":  true,
+                                                                                   "operator":  {
+                                                                                                    "type":  "boolean",
+                                                                                                    "operation":  "true",
+                                                                                                    "singleValue":  true
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        }
+                                     },
+                      "id":  "n-ifapproved",
+                      "name":  "IF Approved",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2,
+                      "position":  [
+                                       3520,
+                                       360
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "PATCH",
+                                         "url":  "={{ \"https://sjomutxvmiatruokjgjy.supabase.co/rest/v1/content_items?id=eq.\" + $(\u0027Prep Approval\u0027).first().json.id }}",
+                                         "authentication":  "predefinedCredentialType",
+                                         "nodeCredentialType":  "supabaseApi",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Prefer",
+                                                                                         "value":  "return=minimal"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({ status: \"ready\", reviewed_at: $now.toISO() }) }}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "n-setready",
+                      "name":  "Set Ready",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       3740,
+                                       260
+                                   ],
+                      "retryOnFail":  true,
+                      "maxTries":  3,
+                      "waitBetweenTries":  2000
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "PATCH",
+                                         "url":  "={{ \"https://sjomutxvmiatruokjgjy.supabase.co/rest/v1/content_items?id=eq.\" + $(\u0027Prep Approval\u0027).first().json.id }}",
+                                         "authentication":  "predefinedCredentialType",
+                                         "nodeCredentialType":  "supabaseApi",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Prefer",
+                                                                                         "value":  "return=minimal"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{ JSON.stringify({ status: \"rejected\", reviewed_at: $now.toISO() }) }}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "n-setrejected",
+                      "name":  "Set Rejected",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       3740,
+                                       460
+                                   ],
+                      "retryOnFail":  true,
+                      "maxTries":  3,
+                      "waitBetweenTries":  2000
                   }
               ],
     "connections":  {
@@ -429,7 +568,58 @@
                                                             }
                                                         ]
                                                     ]
-                                       }
+                                       },
+                        "Insert Content":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Prep Approval",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Prep Approval":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Telegram Approve",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "Telegram Approve":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "IF Approved",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "IF Approved":  {
+                                            "main":  [
+                                                         [
+                                                             {
+                                                                 "node":  "Set Ready",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ],
+                                                         [
+                                                             {
+                                                                 "node":  "Set Rejected",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ]
+                                                     ]
+                                        }
                     },
     "active":  false,
     "settings":  {
