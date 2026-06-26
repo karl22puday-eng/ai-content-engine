@@ -1,0 +1,82 @@
+{
+    "name":  "02 Error Handler",
+    "nodes":  [
+                  {
+                      "parameters":  {
+
+                                     },
+                      "id":  "n-errtrigger",
+                      "name":  "Error Trigger",
+                      "type":  "n8n-nodes-base.errorTrigger",
+                      "typeVersion":  1,
+                      "position":  [
+                                       360,
+                                       300
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "mode":  "runOnceForAllItems",
+                                         "jsCode":  "// n8n Error Trigger emits { execution: {...}, workflow: {...} }. Build a readable alert,\n// guarding every field so a malformed/partial payload still produces a usable message.\nconst j = $input.first() ? $input.first().json : {};\nconst ex = j.execution || {};\nconst wf = j.workflow || {};\nconst err = ex.error || {};\nconst s = v =\u003e (v == null ? \u0027\u0027 : String(v)).trim();\n\nconst lines = [\n  \u0027\\u{1F6A8} n8n workflow FAILED\u0027,\n  \u0027\u0027,\n  \u0027Workflow: \u0027 + (s(wf.name) || \u0027unknown\u0027),\n  \u0027Failed node: \u0027 + (s(ex.lastNodeExecuted) || \u0027unknown\u0027),\n  \u0027Mode: \u0027 + (s(ex.mode) || \u0027n/a\u0027),\n  \u0027\u0027,\n  \u0027Error: \u0027 + (s(err.message) || s(err.description) || \u0027no message provided\u0027)\n];\nif (s(ex.url)) { lines.push(\u0027\u0027, \u0027Execution: \u0027 + s(ex.url)); }\n\nlet text = lines.join(\u0027\\n\u0027);\nif (text.length \u003e 3900) text = text.slice(0, 3900) + \u0027\\n...\u0027;   // Telegram 4096-char limit\nreturn [{ json: { text } }];"
+                                     },
+                      "id":  "n-format",
+                      "name":  "Format Alert",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       580,
+                                       300
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "resource":  "message",
+                                         "operation":  "sendMessage",
+                                         "chatId":  "7237369464",
+                                         "text":  "={{ $json.text }}",
+                                         "additionalFields":  {
+
+                                                              }
+                                     },
+                      "id":  "n-tgerr",
+                      "name":  "Telegram Error Alert",
+                      "type":  "n8n-nodes-base.telegram",
+                      "typeVersion":  1.2,
+                      "position":  [
+                                       800,
+                                       300
+                                   ],
+                      "retryOnFail":  true,
+                      "maxTries":  2,
+                      "waitBetweenTries":  1500
+                  }
+              ],
+    "connections":  {
+                        "Error Trigger":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Format Alert",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "Format Alert":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Telegram Error Alert",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         }
+                    },
+    "active":  false,
+    "settings":  {
+                     "executionOrder":  "v1"
+                 }
+}

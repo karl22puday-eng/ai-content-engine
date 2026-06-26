@@ -95,6 +95,10 @@ each run: one approvable pack at a time.
 - **Deliberate scope boundary.** Auto-posting to LinkedIn/X is intentionally out of scope —
   those APIs need app review / paid tiers, and this is a 100%-free build. "Ready" = approved &
   queued; the dashboard is the deliverable surface.
+- **Fails loudly, not silently.** A global **Error Trigger** workflow ([`02_error_handler`](workflows/02_error_handler.json))
+  is set as the Error Workflow for the pipeline, so any failed execution pushes a Telegram alert
+  with the workflow name, the failed node, and a link to the execution — operational visibility
+  without watching the n8n console.
 
 ## Live demo
 
@@ -104,8 +108,8 @@ each run: one approvable pack at a time.
 
 ✅ Working end to end: RSS → AI content pack → Telegram approval → status flip → live dashboard.
 See [`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md) for the build order and engineering notes, and
-[`workflows/`](workflows/) for the exported n8n workflow (reproducible via
-[`scripts/build-generator-workflow.ps1`](scripts/build-generator-workflow.ps1)).
+[`workflows/`](workflows/) for the exported n8n workflows — the generator and a global error
+handler — both reproducible from source via the [`scripts/`](scripts/) build scripts.
 
 ---
 
